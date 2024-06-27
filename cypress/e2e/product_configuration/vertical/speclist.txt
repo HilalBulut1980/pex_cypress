@@ -1,0 +1,12 @@
+cypress/e2e/product_configuration/vertical/configure_VS1_Fensterfluegel_Monza-1113_Paypal.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS1_Klemmtraeger_Syrakus-2079_Kreditkarte.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS1_direkt_Bologna-2028_PayPalExpress.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS1_direkt_Bologna-2028_Vorkasse.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_FalzFix_Luna-4174_Sofort.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_GLW_Wabe-Stylo-4786_Vorkasse.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_Gelenkklebeplatten_Dimout-5067_Vorkasse.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_Klebeleisten_Crush-Topar-4270_Vorkasse.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_Klebeleisten_Finura-4440_Sepa.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_Slim_Radiance-4876_Rechnung.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_StickFixFront_Hestia-4544_Giropay.spec.js
+cypress/e2e/product_configuration/vertical/configure_VS2_StickFix_Triest-1033_Vorkasse.spec.js

@@ -1,0 +1,10 @@
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_10P_pl40.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_10P_vs4s1.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_20P_falzfix.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_20P_montageplatten.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_3K5P_gutschein.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_3K5P_vs1.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_5P_df30c.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_5P_service.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_7K5P_pl11.spec.js
+cypress/e2e/product_configuration/rabattcodes/configure_rabattcode_7K5P_vs2.spec.js

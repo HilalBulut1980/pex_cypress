@@ -1,0 +1,5 @@
+cypress/e2e/product_configuration/user/configure_LoginWithPriceCheck_AT.spec.js
+cypress/e2e/product_configuration/user/configure_LoginWithPriceCheck_CH.spec.js
+cypress/e2e/product_configuration/user/configure_LoginWithPriceCheck_LU.spec.js
+cypress/e2e/product_configuration/user/configure_LoginWithPriceCheck_PL.spec.js
+cypress/e2e/product_configuration/user/configure_LoginWithPriceCheck_SE.spec.js

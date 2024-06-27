@@ -1,0 +1,18 @@
+{
+    "TESTS": [
+        {
+            "url": "",
+            "name": "customer-account 1",
+            "prefix": "Herr",
+            "first_name": "Max",
+            "last_name": "Mustermann",
+            "email": "test@delphinus-test.de",
+            "password": "meinPasswort2019",
+            "phone": "123456",
+            "street": "Teststr.1",
+            "postal": "12345",
+            "city": "Wien",
+            "state": "Österreich"
+        }
+    ]
+}

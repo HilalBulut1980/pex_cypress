@@ -1,0 +1,8 @@
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_email_at.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_email_ch.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_email_de.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_email_eu.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_post_at.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_post_ch.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_post_de.spec.js
+cypress/e2e/product_configuration/gutscheine/configure_gutschein_post_eu.spec.js

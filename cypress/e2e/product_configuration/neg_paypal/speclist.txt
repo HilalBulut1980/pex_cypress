@@ -1,0 +1,4 @@
+cypress/e2e/product_configuration/neg_paypal/configure_NEG_Giropay_canceledPayment.spec.js
+cypress/e2e/product_configuration/neg_paypal/configure_NEG_Giropay_failedPayment.spec.js
+cypress/e2e/product_configuration/neg_paypal/configure_NEG_Sofort_canceledPayment.spec.js
+cypress/e2e/product_configuration/neg_paypal/configure_NEG_Sofort_failedPayment.spec.js
