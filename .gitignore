@@ -1,0 +1,12 @@
+node_modules/*
+.idea
+cypress/integration/examples/*
+cypress/screenshots/*
+cypress/videos/*
+.vscode/
+cypress/fixtures/test.json
+invoicesPEX/*
+debug.log
+archive.zip
+cron/cron_error.log
+cron/cron_output.log
