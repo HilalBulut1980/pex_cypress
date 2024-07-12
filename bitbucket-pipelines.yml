@@ -1,0 +1,788 @@
+
+image: atlassian/default-image:4
+
+definitions:
+  caches:
+    cypress: $HOME/.cache/Cypress # location of cache
+
+
+  .install-script: 
+  - &install-script |
+    apt-get -y update
+    apt-get upgrade -y google-chrome-stable
+    npm install cypress-cloud 
+    npm install json-logic-js
+    mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+
+
+
+# image definition 
+  image:  &cypress-image-cache
+    cypress/included:12.17.4
+
+
+  specgroup_variables: &variable-list   # I M P O R T A N T --> NEVER include specgroup "NONE" into this list" !!
+    - "*"
+    - CUSTOM
+    - gutscheine
+    - muster
+    - neg_paypal 
+    - neg_empty_inputs
+    - neg_paypal
+    - neg_roof 
+    - neg_special_I
+    - neg_special_II
+    - neg_vatid
+    - neg_vertical 
+    - rabattcodes
+    - rmg
+    - roof
+    - serviceprodukte 
+    - special_tests
+    - specialforms
+    - user
+    - vatid 
+    - vertical
+    - zubehoer
+ 
+
+  multiple_specgroup-variables: &multiple-variable-list  # I M P O R T A N T --> NEVER include specgroup "CUSTOM and "*" into this list" !!
+    - gutscheine
+    - muster
+    - neg_paypal 
+    - neg_empty_inputs
+    - neg_paypal
+    - neg_roof 
+    - neg_special_I
+    - neg_special_II
+    - neg_vatid
+    - neg_vertical 
+    - rabattcodes
+    - rmg
+    - roof
+    - serviceprodukte 
+    - special_tests
+    - specialforms
+    - user
+    - vatid 
+    - vertical
+    - zubehoer
+    - "NONE"    
+
+
+  steps:
+ 
+# job definition for generating current speclist
+    - step: &generate-speclist
+        name: update speclist
+        max-time: 5
+        script: 
+          - echo "Committing new specfiles"
+          - bash list-specfiles.sh cypress/e2e/product_configuration 
+          - git add cypress/e2e/product_configuration/*
+          # Use [skip ci] when you are pushing back to your repository. This will stop pipelines triggering on the new commit and avoid an eternal loop!
+          - git commit -m "Auto-generate speclists [skip ci]"
+          - git push
+        condition:
+          changesets:
+            includePaths:
+              - "cypress/e2e/product_configuration/*/*"
+
+
+
+# job definition for handling chosen specgroups
+    - step: &assign-specfiles
+        name: handle chosen specgroups
+        max-time: 5
+        script:
+          - mkdir cypress/e2e/SPECS
+          - >- 
+            if [ "$SPECGROUP" != "NONE" ] && [ "$SPECGROUP" != "CUSTOM" ] ; then
+               if [ "$SPECGROUP" != "*" ]; then
+                  cp -r cypress/e2e/product_configuration/"$SPECGROUP"/* cypress/e2e/SPECS
+                  countspecs=$(ls cypress/e2e/SPECS | grep spec.js | wc -l)
+                  echo "Total specfiles: $countspecs"
+               else 
+                 while read line; do
+                   cp -r cypress/e2e/product_configuration/"$line"/* cypress/e2e/SPECS
+                 done < <(ls cypress/e2e/product_configuration)
+                 
+                 countspecs=$(ls cypress/e2e/SPECS | grep spec.js | wc -l)
+                 echo "Total specfiles: $countspecs"
+               fi
+            fi
+          - >-
+            if [ "$SPECGROUP" = "CUSTOM" ] ; then 
+               while read -r line; do 
+                 echo "$line"
+                 cp "$line" cypress/e2e/SPECS
+               done  < custom-speclist.txt
+
+               countspecs=$(ls cypress/e2e/SPECS | grep spec.js | wc -l)
+               echo "Total specfiles: $countspecs"
+            fi
+          - >-
+            if [ "$SPECGROUP_2" != "NONE" ] && [ "$SPECGROUP_2" != "CUSTOM" ] && [ "$SPECGROUP_2" != "$SPECGROUP" ] && [ "$SPECGROUP" != "*" ] && [ "$SPECGROUP_2" != "*" ] ; then 
+               cp -r cypress/e2e/product_configuration/"$SPECGROUP_2"/. cypress/e2e/SPECS
+               countspecs=$(ls cypress/e2e/SPECS | grep spec.js | wc -l)
+               echo "Total specfiles: $countspecs"
+            fi 
+          - >-
+            if [ "$SPECGROUP_3" != "NONE" ] && [ "$SPECGROUP_3" != "CUSTOM" ] && [ "$SPECGROUP_3" != "$SPECGROUP" ] && [ "$SPECGROUP_3" != "$SPECGROUP_2" ] && [ "$SPECGROUP" != "*" ] && [ "$SPECGROUP_3" != "*" ] ; then 
+               cp -r cypress/e2e/product_configuration/"$SPECGROUP_3"/. cypress/e2e/SPECS
+               countspecs=$(ls cypress/e2e/SPECS | grep spec.js | wc -l)
+               echo "Total specfiles: $countspecs"
+            fi 
+          - ls -A cypress/e2e/SPECS/*.js
+        artifacts: # defining the artifacts to be passed to each future step.
+          - cypress/e2e/SPECS/**      
+
+
+
+# job definition for running spec tests on production  
+    - step: &run-specs-production-no-order
+        name: production NO order
+        max-time: 20
+        image: currentsdev/cypress-included:12.0.1
+        script: 
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          # we do not run sepa tests on production due geolocation issues
+          - rm -f cypress/e2e/product_configuration/SPECS/configure_VS2_Klebeleisten_Finura-4440_Sepa.spec.js
+          - rm -f cypress/e2e/product_configuration/SPECS/configure_VS1_direkt_Bologna-2028_PayPalExpress.spec.js
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://www.....de/  --env placeOrder=false --parallel --group "Production" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "production-NO-order" 
+
+
+
+# job definition for running spec tests on stage
+    - step: &run-specs-stage-no-order
+        name: stage NO order
+        max-time: 20
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://stage.....de/  --env placeOrder=false,js_files_hostname="stage.....de",js_files_url="/js_minify/*.min.js",pp_hostname="c.sandbox.paypal.com" --parallel --group "stage" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "stage-NO-order"    
+
+
+
+# job definition for running spec tests on stage with order placement
+    - step: &run-specs-stage-with-order
+        name: stage with order
+        max-time: 30
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://stage.....de/  --env backend_url="/index.php/uber110blick",placeOrder=true,js_files_hostname="stage.....de",js_files_url="/js_minify/*.min.js",pp_hostname="c.sandbox.paypal.com" --parallel --group "stage" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "stage-WITH-order"
+
+
+
+# job definition for running spec tests on pexdelphinus
+    - step: &run-specs-pexdelphinus-no-order
+        name: pexdelphinus NO order
+        image: currentsdev/cypress-included:12.0.1 
+        script:
+          - *install-script
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://....de/  --env placeOrder=false --parallel --group "pexdelphinus" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "pexdelphinus-NO-order" 
+
+
+
+# job definition for running spec tests on pexdelphinus with order placement
+    - step: &run-specs-pexdelphinus-with-order
+        name: pexdelphinus with order
+        max-time: 30
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://.....de/  --env backend_url="/admin",placeOrder=true --parallel --group "pexdelphinus" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "pexdelphinus-WITH-order" 
+
+
+
+# job definition for running spec tests on pexhilal
+    - step: &run-specs-pexhilal-no-order
+        name: pexhilal NO order
+        max-time: 20
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - *install-script
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://...de/  --env placeOrder=false,js_files_hostname="....de",pp_hostname="c.sandbox.paypal.com" --parallel --group "pexhilal" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "pexhilal-NO-order" 
+
+
+
+# job definition for running spec tests on pexhilal with order placement
+    - step: &run-specs-pexhilal-with-order
+        name: pexhilal with order
+        max-time: 30
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://....de/  --env placeOrder=true,js_files_hostname="....de",pp_hostname="....com" --parallel --group "pexhilal" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/$SPECS/*" --browser chrome --tag "pexhilal-all-tests WITH order" 
+
+
+
+# job definition for running spec tests on pexhilal with order placement
+    - step: &run-specs-pexhilal-special
+        name: pexhilal special
+        max-time: 20
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://....de/  --env backend_url="/admin",placeOrder=true,js_files_hostname="....de" --parallel --group "pexhilal" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/NEG_empty_inputs/configure_NEG_DF30C_finnenbreite_leer.spec.js" --browser chrome --tag "pexhilal-all-tests special" 
+
+
+
+# job definition for running spec tests on pexhakan
+    - step: &run-specs-pexhakan-no-order
+        name: pexhakan NO order
+        max-time: 20
+        image: currentsdev/cypress-included:12.0.1 
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://....de/  --env backend_url="/admin",placeOrder=false,js_files_hostname="....de",pp_hostname="....com" --parallel --group "pexhakan" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "pexhakan-NO-order" 
+
+
+
+# job definition for running spec tests on pexhakan with order placement
+    - step: &run-specs-pexhakan-with-order
+        name: pexhakan with order
+        max-time: 30
+        image: currentsdev/cypress-included:12.0.1
+        script:
+          - apt-get -y update
+          - apt-get upgrade -y google-chrome-stable
+          - npm install cypress-cloud 
+          - npm install json-logic-js  
+          - mv cypress/e2e/SPECS cypress/e2e/product_configuration/
+          - npx cypress cache clear
+          - export CYPRESS_DOWNLOAD_MIRROR=https://cy-cdn.currents.dev
+          - npx cypress install
+          - ls -A cypress/e2e/product_configuration/SPECS
+          - npx cypress-cloud --config baseUrl=https://.../  --env backend_url="/admin",placeOrder=true,js_files_hostname="....de",pp_hostname="....com" --parallel --group "pexhakan" --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "pexhakan-WITH-order" 
+
+
+
+    - step: &login-to-server-and-run-specs-no-order
+        caches: 
+          - cypress
+        image: *cypress-image-cache
+        script:
+           - apt-get update && apt-get upgrade google-chrome-stable -y
+           - npm install @currents/cli
+           - npm install json-logic-js
+           - pipe: atlassian/ssh-run:0.6.1
+             variables:
+               SSH_USER: 'delphinu'
+               SERVER: 'delphinus-test.de'
+               MODE: 'command'
+               COMMAND: './minidump_pex/04_scripts/expect.sh $TESTUMGEBUNG $TESTBRANCH $IMPORT_MINIDUMP' # checkout testumgebung on specified testbranch
+        after-script:
+              - echo $BITBUCKET_EXIT_CODE
+              - echo baseUrl=https://$TESTUMGEBUNG.delphinus-test.de
+              - if [[ $BITBUCKET_EXIT_CODE -eq 0 ]]; then npx cypress-cloud --config baseUrl=https://${TESTUMGEBUNG}.delphinus-test.de  --env placeOrder=false  --group $TESTUMGEBUNG --ci-build-id $BITBUCKET_BUILD_NUMBER --record  --spec "cypress/e2e/product_configuration/SPECS/*" --browser chrome --tag "$TESTUMGEBUNG-NO-order" ; else echo "Step failed!"; fi
+              
+
+
+clone:
+  depth: 1
+  
+
+pipelines:
+  default:
+    - step: *generate-speclist
+    
+        
+  custom: # Pipelines that are triggered manually
+    production-NO-order: # The name that is displayed in the list in the Bitbucket 
+      - variables:
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list               
+      - step: *assign-specfiles
+      - parallel:
+    # run N steps in parallel 
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+         - step: *run-specs-production-no-order
+
+
+
+    stage-NO-order:  
+      - variables:
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list  
+      - step: *assign-specfiles
+      - parallel:
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+         - step: *run-specs-stage-no-order
+
+
+
+    # run specs on stage with order placement
+    stage-with-order:
+      - variables:
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list  
+      - step:
+          script:
+            - echo "Es wird MIT Bestellabgabe auf STAGE getestet."
+      - step: *assign-specfiles
+      - parallel:
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         - step: *run-specs-stage-with-order
+         
+
+
+    pexdelphinus-NO-order:
+      - variables:
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja"               
+      - step: *assign-specfiles                    
+      - step:
+          script:
+             - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi
+             - echo "Es wird OHNE Bestellabgabe auf pex.delphinus-test.de gegen $TESTBRANCH getestet."
+             - pipe: atlassian/ssh-run:0.4.1
+               variables:
+                 SSH_USER: 'delphinu'
+                 SERVER: 'delphinus-test.de'
+                 MODE: 'command'
+                 COMMAND: './minidump_pex/04_scripts/expect.sh pex $TESTBRANCH $IMPORT_MINIDUMP' # checkout pex.delphinus-test.de on specified testbranch
+          after-script:
+            - echo $BITBUCKET_EXIT_CODE       
+      - parallel:
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+         - step: *run-specs-pexdelphinus-no-order
+
+
+
+    # checkout pex.delphinus-test.de on specified testbranch, import minidump and start specgroup
+    pexdelphinus-with-order:
+      - variables:
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja"    
+      - step: *assign-specfiles               
+      - step:
+          script:
+            - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi
+            - echo "Es wird MIT Bestellabgabe auf pex.delphinus-test.de gegen $TESTBRANCH getestet."
+            - pipe: atlassian/ssh-run:0.4.1
+              variables:
+                SSH_USER: 'delphinu'
+                SERVER: 'delphinus-test.de'
+                MODE: 'command'
+                COMMAND: './minidump_pex/04_scripts/expect.sh pex $TESTBRANCH $IMPORT_MINIDUMP'
+          after-script:
+            - echo $BITBUCKET_EXIT_CODE
+      - parallel:
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+         - step: *run-specs-pexdelphinus-with-order
+
+
+
+    pexhilal-NO-order:
+      - variables:
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja"
+      - step: *assign-specfiles        
+      - step:
+          script:
+           - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi
+           - echo "Es wird OHNE Bestellabgabe auf pexhilal gegen $TESTBRANCH getestet."
+           - pipe: atlassian/ssh-run:0.4.1
+             variables:
+               SSH_USER: 'delphinu'
+               SERVER: 'delphinus-test.de'
+               MODE: 'command'
+               COMMAND: './minidump_pex/04_scripts/expect.sh pexhilal $TESTBRANCH $IMPORT_MINIDUMP'
+          after-script:
+            - echo $BITBUCKET_EXIT_CODE
+      - parallel:
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+         - step: *run-specs-pexhilal-no-order
+
+
+
+    pexhilal-with-order:
+      - variables:
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja"
+      - step: *assign-specfiles           
+      - step:
+          script:
+            - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi 
+            - echo "Es wird MIT Bestellabgabe auf pexhilal gegen $TESTBRANCH getestet."
+            - pipe: atlassian/ssh-run:0.4.1
+              variables:
+                SSH_USER: 'delphinu'
+                SERVER: 'delphinus-test.de'
+                MODE: 'command'
+                COMMAND: './minidump_pex/04_scripts/expect.sh pexhilal $TESTBRANCH $IMPORT_MINIDUMP'
+          after-script:
+            - echo $BITBUCKET_EXIT_CODE
+      - parallel:
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+         - step: *run-specs-pexhilal-with-order
+
+
+    run-specs-pexhilal-special:
+      - step:
+          script:
+            - echo "Die Specgruppe $SPECGROUP wird MIT Bestellabgeabe auf pexhilal gegen $TESTBRANCH getestet."
+      - parallel:
+         - step: *run-specs-pexhilal-special
+         
+
+    pexhakan-NO-order:
+      - variables:
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja"
+      - step: *assign-specfiles   
+      - step:
+          script:
+           - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi          
+           - echo "Es wird OHNE Bestellabgabe auf pexhakan gegen $TESTBRANCH getestet."
+           - pipe: atlassian/ssh-run:0.4.1
+             variables:
+               SSH_USER: 'delphinu'
+               SERVER: 'delphinus-test.de'
+               MODE: 'command'
+               COMMAND: './minidump_pex/04_scripts/expect.sh pexhakan $TESTBRANCH $IMPORT_MINIDUMP'
+          after-script:
+            - echo $BITBUCKET_EXIT_CODE
+      - parallel:
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+         - step: *run-specs-pexhakan-no-order
+
+
+
+    pexhakan-with-order:
+      - variables:
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja"
+      - step: *assign-specfiles
+      - step:
+          script:
+            - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi
+            - echo "Es wird MIT Bestellabgabe auf pexhakan gegen $TESTBRANCH getestet."
+            - pipe: atlassian/ssh-run:0.4.1
+              variables:
+                SSH_USER: 'delphinu'
+                SERVER: 'delphinus-test.de'
+                MODE: 'command'
+                COMMAND: './minidump_pex/04_scripts/expect.sh pexhakan $TESTBRANCH $IMPORT_MINIDUMP'
+          after-script:
+            - echo $BITBUCKET_EXIT_CODE
+      - parallel:
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+         - step: *run-specs-pexhakan-with-order
+
+
+
+    specify-testumgebung-NO-order: 
+      - variables:         
+          - name: TESTUMGEBUNG
+            default: "pex"  
+            allowed-values:        
+              - "pex"
+              - "pexhakan"
+              - "pexhilal"
+          - name: TESTBRANCH
+            default: ""
+          - name: SPECGROUP
+            default: "*"
+            allowed-values: *variable-list
+          - name: SPECGROUP_2
+            default: "NONE"
+            allowed-values: *multiple-variable-list     
+          - name: SPECGROUP_3
+            default: "NONE"
+            allowed-values: *multiple-variable-list
+          - name: IMPORT_MINIDUMP
+            default: "nein"
+            allowed-values: 
+              - "nein"
+              - "ja" 
+      - step: *assign-specfiles      
+      - step:
+         script:
+           - if [ -z "$TESTBRANCH" ] ; then TESTBRANCH="CURRENT" ; fi         
+           - echo "Es wird auf $TESTUMGEBUNG gegen Testbranch $TESTBRANCH getestet. "            
+      - step: *login-to-server-and-run-specs-no-order
+    
+       
